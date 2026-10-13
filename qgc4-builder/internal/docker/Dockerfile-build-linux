@@ -1,0 +1,86 @@
+# syntax=docker/dockerfile:1
+#
+# QGroundControl Linux build environment
+#
+# Self-contained image for qgc4-builder/build-linux.sh: it installs the
+# toolchain and Qt 5.15.2 itself, so the build does not depend on the QGC
+# repository's own deploy/docker files. The repository is mounted at run
+# time (/project/source), never copied in, so the image only changes when
+# the toolchain does.
+#
+# Build:
+#   docker build -f internal/docker/Dockerfile-build-linux \
+#                -t qgc-linux-docker internal/docker
+#
+FROM ubuntu:20.04
+
+LABEL org.opencontainers.image.title="qgc-linux-docker" \
+      org.opencontainers.image.description="QGroundControl Linux build environment (Qt 5.15.2)"
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG QT_VERSION=5.15.2
+ARG QT_MODULES=qtcharts
+ARG USER_UID=1000
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    QT_PATH=/opt/Qt \
+    QT_DESKTOP=/opt/Qt/${QT_VERSION}/gcc_64 \
+    QMAKESPEC=linux-g++-64 \
+    PATH=/usr/lib/ccache:/opt/Qt/${QT_VERSION}/gcc_64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Toolchain, Qt runtime/build deps and the helpers the QGC build needs.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        apt-utils \
+        binutils \
+        build-essential \
+        ca-certificates \
+        ccache \
+        cmake \
+        curl \
+        espeak \
+        git \
+        gosu \
+        kmod \
+        libespeak-dev \
+        libfontconfig1 \
+        libgstreamer-plugins-base1.0-dev \
+        libgstreamer1.0-0 \
+        libgstreamer1.0-dev \
+        libsdl2-dev \
+        libssl-dev \
+        libudev-dev \
+        locales \
+        make \
+        ninja-build \
+        openssh-client \
+        patchelf \
+        pkg-config \
+        python3 \
+        python3-pip \
+        rsync \
+        speech-dispatcher \
+        sudo \
+        wget \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Qt 5.15.2 via aqtinstall (no interactive installer, no GUI).
+COPY install-qt-linux.sh /tmp/install-qt-linux.sh
+RUN QT_VERSION="${QT_VERSION}" QT_MODULES="${QT_MODULES}" bash /tmp/install-qt-linux.sh \
+    && rm -f /tmp/install-qt-linux.sh
+
+RUN locale-gen en_US.UTF-8
+
+# Non-root user matching the host uid so the mounted build tree stays
+# writable; build-linux.sh runs the container with --user "$(id -u):$(id -g)".
+RUN groupadd --gid "${USER_UID}" user \
+    && useradd --shell /bin/bash --uid "${USER_UID}" --create-home --comment "" user \
+    && usermod -a -G dialout user \
+    && echo "user ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/user \
+    && chmod 0440 /etc/sudoers.d/user
+
+USER user
+WORKDIR /project/build
+CMD ["bash", "-lc", "qmake /project/source && make -j$(nproc)"]

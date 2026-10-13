@@ -22,14 +22,18 @@ python3 internal/fmt_md_tables.py --in-place FILE.md
 python3 internal/fmt_md_tables.py --output DIR FILE.md
 ```
 
+```bash
+./format-md-table.sh --check FILE.md   # same tool, no python3 prefix
+```
+
 ## Options
 
-| Flag            | Effect                                       |
-| --------------- | -------------------------------------------- |
-| `--check`       | Report misaligned tables, write nothing      |
-| `--in-place`    | Overwrite the inputs instead                 |
-| `--suffix TEXT` | Replace the default suffix                   |
-| `--output DIR`  | Write outputs to `DIR`                       |
+| Flag            | Effect                                  |
+| --------------- | --------------------------------------- |
+| `--check`       | Report misaligned tables, write nothing |
+| `--in-place`    | Overwrite the inputs instead            |
+| `--suffix TEXT` | Replace the default suffix              |
+| `--output DIR`  | Write outputs to `DIR`                  |
 
 ## Exit codes
 

@@ -1,15 +1,22 @@
 #!/bin/bash
 set -euo pipefail
 
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    case "$SOURCE" in /*) ;; *) SOURCE="$DIR/$SOURCE" ;; esac
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
 usage() {
-    cat "$(dirname "${BASH_SOURCE[0]}")/internal/usage.md"
+    cat "$SCRIPT_DIR/internal/usage.md"
 }
 case "${1:-}" in
     -h|--help) usage; exit 0 ;;
 esac
 if [ $# -gt 1 ]; then usage; exit 2; fi
 
-SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_QGC_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 # Get QGC root from argument or use default (cd+pwd: realpath is not everywhere)

@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Development-time files (not uploaded to the published repo)
+/AGENTS.md
+/PYTHON_STYLE.md
+/CODING_GUIDELINES.md

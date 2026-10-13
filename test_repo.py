@@ -20,9 +20,12 @@ import unittest
 ROOT = os.path.dirname(os.path.abspath(__file__))
 FMT = os.path.join(ROOT, "md-table-aligner", "internal", "fmt_md_tables.py")
 USAGE_TRIGGERS = {  # .sh basename -> (argv, expected exit code) for its usage screen
+    "init-tools-env.sh": (["--help"], 0),
     "launch-qgc.sh": (["--help"], 0),
+    "build-linux.sh": (["--help"], 0),
     "stop-process.sh": ([], 2),
 }
+NO_WINDOWS_ENTRY = {"init-tools-env"}  # Linux/macOS only; soft links, no .cmd/.bat
 
 
 def rel(path):
@@ -155,10 +158,13 @@ class Entries(unittest.TestCase):
 
     def test_every_package_has_a_windows_entry(self):
         for pkg in packages():
-            with self.subTest(pkg=os.path.basename(pkg)):
+            name = os.path.basename(pkg)
+            if name in NO_WINDOWS_ENTRY:
+                continue
+            with self.subTest(pkg=name):
                 self.assertTrue(glob.glob(os.path.join(pkg, "*.cmd"))
                                 or glob.glob(os.path.join(pkg, "*.bat")),
-                                os.path.basename(pkg) + " has no .cmd/.bat entry at the package root")
+                                name + " has no .cmd/.bat entry at the package root")
 
     def test_windows_entries_are_crlf_only(self):
         for entry in self.win_entries():

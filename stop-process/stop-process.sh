@@ -1,7 +1,15 @@
 #!/bin/bash
 
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    case "$SOURCE" in /*) ;; *) SOURCE="$DIR/$SOURCE" ;; esac
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
 usage() {
-    cat "$(dirname "$0")/internal/usage.md"
+    cat "$SCRIPT_DIR/internal/usage.md"
 }
 
 if [[ $# -ne 1 ]]; then

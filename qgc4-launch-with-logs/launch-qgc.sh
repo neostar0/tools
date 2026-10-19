@@ -69,6 +69,65 @@ fi
 
 echo "[Launcher] Executable: $EXE"
 
+# --- Linux host preflight ---------------------------------------------------
+# QGC itself refuses to start when the user cannot access serial devices:
+# it parses /etc/group for the dialout group and shows a modal dialog
+# (QGCApplication.cc). ModemManager additionally fights over the same
+# devices. Detect both here so the user gets an actionable console message
+# and an automatic fix instead of QGC's dialog. This lives in the launcher,
+# not init-tools-env: the tools repo never edits system configuration from
+# its symlink manager, and the failure surfaces at launch time.
+if [[ "$OS_TYPE" == "linux" ]]; then
+    if [[ "$(id -u)" -eq 0 ]]; then
+        echo "[ERROR] QGroundControl refuses to run as root. Launch as your normal user instead." >&2
+        exit 1
+    fi
+
+    confirm() {
+        local reply
+        read -r -p "$1 [y/N] " reply || return 1
+        [[ "$reply" == [yY] || "$reply" == [yY][eE][sS] ]]
+    }
+
+    USER_NAME="$(id -un)"
+    NEED_DIALOUT_SG=0
+
+    if ! id -nG "$USER_NAME" | grep -qw dialout; then
+        echo "[Launcher] User '$USER_NAME' is not in the dialout group (serial device access)."
+        if [[ -t 0 ]] && confirm "Add '$USER_NAME' to dialout now? (runs: sudo usermod -a -G dialout $USER_NAME)"; then
+            if ! sudo usermod -a -G dialout "$USER_NAME"; then
+                echo "[ERROR] usermod failed; cannot continue." >&2
+                exit 1
+            fi
+            echo "[Launcher] Added to dialout. The current session predates the change,"
+            echo "[Launcher] so QGC will be started via 'sg dialout' (no re-login needed)."
+            NEED_DIALOUT_SG=1
+        else
+            cat >&2 <<EOF
+[ERROR] QGroundControl will refuse to start without dialout group membership.
+Fix it once, then run launch-qgc again (or simply re-login):
+    sudo usermod -a -G dialout $USER_NAME
+Also recommended, to stop ModemManager from grabbing serial devices:
+    sudo apt-get remove modemmanager
+EOF
+            exit 1
+        fi
+    elif [[ ":$(id -nG):" != *:dialout:* ]]; then
+        # Member per /etc/group, but this login session predates the change.
+        # sg grants the group for this one process; no re-login needed.
+        NEED_DIALOUT_SG=1
+    fi
+
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet modemmanager 2>/dev/null; then
+        echo "[Launcher] ModemManager is active; it interferes with serial devices."
+        if [[ -t 0 ]] && confirm "Disable it now? (runs: sudo systemctl disable --now modemmanager)"; then
+            sudo systemctl disable --now modemmanager || echo "[Launcher] WARNING: could not disable ModemManager" >&2
+        else
+            echo "[Launcher] Recommended: sudo systemctl disable --now modemmanager"
+        fi
+    fi
+fi
+
 # Generate timestamp for log file
 TIMESTAMP=$(date +"%Y_%m_%d_%H%M%S")
 LOGFILE="$(pwd)/qgc_${TIMESTAMP}.log"
@@ -85,11 +144,18 @@ echo "------------------------------------------------"
 # stdbuf is GNU/Linux only, so fall back to a plain launch elsewhere.
 # The tee pipeline runs with set +e so a non-zero QGC exit code reaches
 # the summary below instead of killing the script (set -e + pipefail).
-set +e
 if command -v stdbuf >/dev/null 2>&1; then
-    stdbuf -oL -eL "$EXE" 2>&1 | tee "$LOGFILE"
+    QGC_CMD=(stdbuf -oL -eL "$EXE")
 else
-    "$EXE" 2>&1 | tee "$LOGFILE"
+    QGC_CMD=("$EXE")
+fi
+set +e
+if [[ "${NEED_DIALOUT_SG:-0}" -eq 1 ]]; then
+    # Session predates the usermod: sg re-executes with 'dialout' as a
+    # supplementary group for this process only.
+    sg dialout -c "$(printf '%q ' "${QGC_CMD[@]}")" 2>&1 | tee "$LOGFILE"
+else
+    "${QGC_CMD[@]}" 2>&1 | tee "$LOGFILE"
 fi
 EXIT_CODE=${PIPESTATUS[0]}
 set -e

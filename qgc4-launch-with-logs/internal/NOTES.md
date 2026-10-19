@@ -58,6 +58,30 @@ python -m unittest discover internal -v
    code, Ctrl+C (130) included (the `.cmd` wrapper passes it; agents never
    should). A second Ctrl+C during the wait force-closes
 
+## Linux Host Preflight (launch-qgc.sh only)
+
+QGC's own startup check (QGCApplication.cc) parses `/etc/group` for the
+`dialout` group and shows a modal dialog — un-skippable — when the user
+lacks serial device access. ModemManager grabs the same devices. The shell
+launcher therefore preflights on Linux, before paying the launch cost:
+
+- **Not root**: refuse early; QGC exits on root anyway.
+- **User not in `dialout`** (per `id -nG <user>`, i.e. the /etc/group
+  database): on a TTY, offer to run `sudo usermod -a -G dialout`; after a
+  successful usermod the current session still lacks the group, so the
+  launch is wrapped in `sg dialout -c …` (no re-login needed). Non-TTY
+  (agent): print the fix commands and exit 1.
+- **In `dialout` per database but not in the current session** (`id -nG`
+  without args): wrap the launch in `sg dialout -c …` silently.
+- **ModemManager active**: offer `sudo systemctl disable --now
+  modemmanager` (reversible; QGC's dialog says `apt-get remove`, which is
+  heavier than needed). Non-active installs are ignored.
+
+Why here and not init-tools-env: that tool's contract is symlink
+management only (`--check` must stay side-effect free); the failure
+surfaces at launch time, so the check lives next to it. The Python
+launcher needs no preflight — the group check is `#ifdef Q_OS_LINUX`.
+
 ## The .cmd Wrapper (Ctrl+C)
 
 `drop-qgc-folder-here.cmd` starts python with:

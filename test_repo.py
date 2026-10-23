@@ -24,8 +24,10 @@ USAGE_TRIGGERS = {  # .sh basename -> (argv, expected exit code) for its usage s
     "launch-qgc.sh": (["--help"], 0),
     "build-linux.sh": (["--help"], 0),
     "stop-process.sh": ([], 2),
+    "launch-realsense-viewer.sh": (["--help"], 0),
 }
-NO_WINDOWS_ENTRY = {"init-tools-env"}  # Linux/macOS only; soft links, no .cmd/.bat
+# Linux/macOS only; soft links or Ubuntu-only installers, no .cmd/.bat
+NO_WINDOWS_ENTRY = {"init-tools-env", "launch-realsense-viewer"}
 
 
 def rel(path):

@@ -2,8 +2,9 @@
 
 Put this repo's command-line tools on `PATH` under short names by creating
 soft links in a bin directory. Use it after cloning the repo or moving it,
-so `launch-qgc`, `close-qgc`, `format-md-table` and `build-qgc` work from any
-directory. `--remove` takes those links back out.
+so `launch-qgc`, `close-qgc`, `format-md-table`, `build-qgc`, `run-qgc-apk`,
+`run-apk-on-avd`, `build-qgc-apk` and `android-avd` work from any directory. `--remove` takes those links
+back out.
 
 ## Command Line
 
@@ -19,12 +20,16 @@ Linux/macOS only. Run from anywhere.
 
 ## Links created
 
-| Name              | Target                                |
-| ----------------- | ------------------------------------- |
-| `launch-qgc`      | `qgc4-launch-with-logs/launch-qgc.sh` |
-| `close-qgc`       | `close-qgc/close-qgc.sh`              |
-| `format-md-table` | `md-table-aligner/format-md-table.sh` |
-| `build-qgc`       | `qgc4-builder/build-linux.sh`         |
+| Name              | Target                                       |
+| ----------------- | -------------------------------------------- |
+| `launch-qgc`      | `qgc4-launch-with-logs/launch-qgc.sh`        |
+| `close-qgc`       | `close-qgc/close-qgc.sh`                     |
+| `format-md-table` | `md-table-aligner/format-md-table.sh`        |
+| `build-qgc`       | `qgc4-builder/build-linux.sh`                |
+| `run-qgc-apk`     | `run-qgc-apk/run-qgc-apk.sh`                 |
+| `run-apk-on-avd`  | `run-apk-on-avd/run-apk-on-avd.sh`           |
+| `build-qgc-apk`   | `qgc-android-builder/qgc-android-builder.sh` |
+| `android-avd`     | `android-avd/android-avd.sh`                 |
 
 ## Arguments and flags
 

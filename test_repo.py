@@ -24,6 +24,10 @@ USAGE_TRIGGERS = {  # .sh basename -> (argv, expected exit code) for its usage s
     "launch-qgc.sh": (["--help"], 0),
     "build-linux.sh": (["--help"], 0),
     "stop-process.sh": ([], 2),
+    "run-qgc-apk.sh": (["--help"], 0),
+    "run-apk-on-avd.sh": (["--help"], 0),
+    "android-avd.sh": (["--help"], 0),
+    "qgc-android-builder.sh": (["--help"], 0),
     "launch-realsense-viewer.sh": (["--help"], 0),
 }
 # Linux/macOS only; soft links or Ubuntu-only installers, no .cmd/.bat

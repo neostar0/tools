@@ -6,6 +6,10 @@ Create, refresh or remove the soft links that put this repo's tools on PATH:
   close-qgc        -> close-qgc/close-qgc.sh
   format-md-table  -> md-table-aligner/format-md-table.sh
   build-qgc        -> qgc4-builder/build-linux.sh
+  run-qgc-apk      -> run-qgc-apk/run-qgc-apk.sh
+  run-apk-on-avd   -> run-apk-on-avd/run-apk-on-avd.sh
+  build-qgc-apk    -> qgc-android-builder/qgc-android-builder.sh
+  android-avd      -> android-avd/android-avd.sh
 
 BIN_DIR defaults to $HOME/.local/bin. Re-running is safe and idempotent.
 

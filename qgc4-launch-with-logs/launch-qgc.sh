@@ -128,9 +128,12 @@ EOF
     fi
 fi
 
-# Generate timestamp for log file
+# Generate timestamp for log file and crash artifacts
 TIMESTAMP=$(date +"%Y_%m_%d_%H%M%S")
 LOGFILE="$(pwd)/qgc_${TIMESTAMP}.log"
+CRASH_DUMP_DIR="$(pwd)/dump"
+CRASH_CORE="$CRASH_DUMP_DIR/qgc_${TIMESTAMP}.core"
+CRASH_BT="$CRASH_DUMP_DIR/qgc_${TIMESTAMP}.bt"
 echo "[Launcher] Log file: $LOGFILE"
 
 # Set log categories
@@ -140,11 +143,103 @@ export QT_LOGGING_RULES="qt.qml.connections=false;*.debug=false"
 echo "[Launcher] Log categories: FactPanelControllerLog, ParameterManagerLog, MAVLinkLogManagerLog, HealthAndArmingChecks, GStreamerAPILog"
 echo "------------------------------------------------"
 
+# Run QGC under gdb on Linux so a crash produces a core dump and a
+# backtrace even when the system core_pattern is routed to apport (or
+# core dumps are disabled with ulimit -c 0).  Set QGC_LAUNCH_NO_GDB=1 to
+# launch directly instead.
+USE_GDB=0
+GDB_CMDFILE=""
+if [[ "$OS_TYPE" == "linux" ]] && command -v gdb >/dev/null 2>&1 && [[ "${QGC_LAUNCH_NO_GDB:-0}" != "1" ]]; then
+    USE_GDB=1
+    mkdir -p "$CRASH_DUMP_DIR"
+    echo "[Launcher] Crash dump directory: $CRASH_DUMP_DIR"
+    GDB_CMDFILE="$(mktemp "${TMPDIR:-/tmp}/qgc-gdb.XXXXXX")"
+    trap 'rm -f "${GDB_CMDFILE:-}"' EXIT
+    cat > "$GDB_CMDFILE" <<'GDB'
+set pagination off
+set confirm off
+set print thread-events off
+set use-coredump-filter on
+handle SIGPIPE nostop noprint pass
+handle SIGTERM nostop noprint pass
+handle SIGINT nostop noprint pass
+run
+python
+import gdb, os
+inf = gdb.selected_inferior()
+if inf.pid and inf.threads():
+    corefile = os.environ.get("QGC_CORE_FILE", "")
+    btfile = os.environ.get("QGC_BT_FILE", "")
+    if os.environ.get("QGC_CORE_DISABLED") == "1":
+        corefile = ""
+    print("\n[Launcher] QGroundControl crashed; collecting diagnostics...")
+    try:
+        bt = gdb.execute("bt full", to_string=True)
+        allbt = gdb.execute("thread apply all bt", to_string=True)
+        print(bt)
+        print(allbt)
+        if btfile:
+            with open(btfile, "w") as f:
+                f.write(bt)
+                f.write("\n")
+                f.write(allbt)
+            print("[Launcher] Backtrace written to " + btfile)
+        if corefile:
+            # Ask gdb to honor coredump_filter (skip file-backed pages).
+            # QGC can still produce a multi-GB core; use
+            # QGC_LAUNCH_NO_CORE=1 if disk space is a concern.
+            try:
+                with open("/proc/%d/coredump_filter" % inf.pid, "w") as f:
+                    f.write("0x11\n")
+            except OSError:
+                pass
+            # generate-core-file takes a bare filename; quote-like characters
+            # would become part of the path.
+            escaped_core = corefile.replace('\\', '\\\\').replace(' ', '\\ ')
+            gdb.execute("generate-core-file " + escaped_core)
+            print("[Launcher] Core dump written to " + corefile)
+    except gdb.error as exc:
+        print("[Launcher] Could not collect crash diagnostics: %s" % exc)
+    try:
+        signo = int(gdb.parse_and_eval("$_siginfo.si_signo"))
+        code = 128 + signo
+    except Exception:
+        code = 139
+    gdb.execute("quit %d" % code)
+else:
+    try:
+        code = int(gdb.parse_and_eval("$_exitcode"))
+    except Exception:
+        code = 1
+    gdb.execute("quit %d" % code)
+end
+GDB
+    export QGC_CORE_FILE="$CRASH_CORE"
+    export QGC_BT_FILE="$CRASH_BT"
+    if [[ "${QGC_LAUNCH_NO_CORE:-0}" == "1" ]]; then
+        export QGC_CORE_DISABLED=1
+        echo "[Launcher] Crash diagnostics: gdb enabled (backtrace only, core disabled)"
+    else
+        echo "[Launcher] Crash diagnostics: gdb enabled (core: $CRASH_CORE)"
+    fi
+    echo "[Launcher] Set QGC_LAUNCH_NO_GDB=1 to launch without gdb."
+    echo "[Launcher] Set QGC_LAUNCH_NO_CORE=1 to keep only the backtrace."
+elif [[ "$OS_TYPE" == "linux" ]]; then
+    # Fallback for systems without gdb: raise the core limit.  Whether a
+    # core file is actually written still depends on kernel.core_pattern.
+    ulimit -c unlimited 2>/dev/null || true
+    echo "[Launcher] WARNING: gdb not found; relying on system core dump settings."
+fi
+
 # Launch with tee to both console and log file.
 # stdbuf is GNU/Linux only, so fall back to a plain launch elsewhere.
 # The tee pipeline runs with set +e so a non-zero QGC exit code reaches
 # the summary below instead of killing the script (set -e + pipefail).
-if command -v stdbuf >/dev/null 2>&1; then
+if [[ "$USE_GDB" -eq 1 ]]; then
+    # gdb owns the inferior, so stdbuf cannot wrap it. QGC's Qt logging is
+    # still captured from stderr.
+    QGC_CMD=(gdb -q -batch -x "$GDB_CMDFILE" --args "$EXE")
+elif command -v stdbuf >/dev/null 2>&1; then
     QGC_CMD=(stdbuf -oL -eL "$EXE")
 else
     QGC_CMD=("$EXE")
@@ -164,8 +259,19 @@ echo "------------------------------------------------"
 echo "[Launcher] QGroundControl exited with code $EXIT_CODE"
 echo "[Launcher] Full log saved to: $LOGFILE"
 
+if [[ -f "$CRASH_CORE" ]]; then
+    echo "[Launcher] Crash core dump: $CRASH_CORE"
+fi
+if [[ -f "$CRASH_BT" ]]; then
+    echo "[Launcher] Crash backtrace: $CRASH_BT"
+fi
+
 if [[ $EXIT_CODE -ne 0 ]]; then
     echo "[WARNING] Non-zero exit code. Check log for details."
+    if [[ ! -f "$CRASH_CORE" && ! -f "$CRASH_BT" ]]; then
+        echo "[WARNING] No crash dump was captured. Re-run with gdb available (Linux) or"
+        echo "          check that QGC_LAUNCH_NO_GDB is not set."
+    fi
 fi
 
 # Hand QGC's exit code to the caller, same as the Python launcher

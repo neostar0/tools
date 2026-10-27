@@ -40,6 +40,25 @@ cover parameter loading, MAVLink, health checks and GStreamer (see
 `0` — success, `1` — executable not found or launch failed, `2` — invalid
 arguments, `130` — interrupted; any other value is QGC's own exit code.
 
+## Crash dumps (Linux shell launcher)
+
+When `gdb` is available, `launch-qgc.sh` runs QGroundControl under gdb. If QGC
+receives `SIGSEGV`/`SIGABRT`, it writes two files into a `dump/` directory next
+to the log:
+
+- `dump/qgc_<timestamp>.bt` — `bt full` and `thread apply all bt`
+- `dump/qgc_<timestamp>.core` — gdb core dump
+
+Core files can be several GB. Set these environment variables when needed:
+
+```bash
+QGC_LAUNCH_NO_CORE=1 launch-qgc   # backtrace only
+QGC_LAUNCH_NO_GDB=1  launch-qgc   # launch directly, no crash dump
+```
+
+Without gdb, the launcher falls back to `ulimit -c unlimited`; whether a core
+is written then depends on the system `kernel.core_pattern`.
+
 ## Requirements
 
 Python 3.6+ (for the `.py` launcher); QGroundControl built with Qt 5.15.

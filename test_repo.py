@@ -22,7 +22,9 @@ FMT = os.path.join(ROOT, "md-table-aligner", "internal", "fmt_md_tables.py")
 USAGE_TRIGGERS = {  # .sh basename -> (argv, expected exit code) for its usage screen
     "init-tools-env.sh": (["--help"], 0),
     "launch-qgc.sh": (["--help"], 0),
+    "run-qgc5.sh": (["--help"], 0),
     "build-linux.sh": (["--help"], 0),
+    "build-qgc5.sh": (["--help"], 0),
     "stop-process.sh": ([], 2),
     "run-qgc-apk.sh": (["--help"], 0),
     "run-apk-on-avd.sh": (["--help"], 0),

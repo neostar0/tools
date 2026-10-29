@@ -37,9 +37,11 @@ fi
 
 LINKS="
 launch-qgc:qgc4-launch-with-logs/launch-qgc.sh
+run-qgc5:qgc5-run-with-logs/run-qgc5.sh
 close-qgc:close-qgc/close-qgc.sh
 format-md-table:md-table-aligner/format-md-table.sh
 build-qgc:qgc4-builder/build-linux.sh
+build-qgc5:qgc5-builder/build-qgc5.sh
 run-qgc-apk:run-qgc-apk/run-qgc-apk.sh
 run-apk-on-avd:run-apk-on-avd/run-apk-on-avd.sh
 build-qgc-apk:qgc-android-builder/qgc-android-builder.sh

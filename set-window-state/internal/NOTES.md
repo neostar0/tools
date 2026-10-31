@@ -10,22 +10,32 @@ folder and calls this one.
 
 ## Layout
 
-- `../set-window-state.cmd` — entry, a launcher: it prints `usage.md` +
-  `pause` only when run with no arguments (so a double-click still
-  shows the screen), otherwise it hands `%*` to `window_state.ps1` and
-  propagates its exit code. It does **not** validate anything — the
-  argument rules belong to the script alone, one copy only.
-- `window_state.ps1` — the implementation: argument handling, the
-  platform guard, the compile-and-load step, per-window failure
+- `../set-window-state.cmd` — Windows entry, a launcher: it prints
+  `usage.md` + `pause` only when run with no arguments (so a
+  double-click still shows the screen), otherwise it hands `%*` to
+  `window_state.ps1` and propagates its exit code. It does **not**
+  validate anything — the argument rules belong to the script alone,
+  one copy only.
+- `../set-window-state.sh` — Linux entry: it makes `--help` and the
+  no-argument usage screen reachable, then hands every argument to
+  `window_state_linux.py`. It does not validate the state either.
+- `window_state.ps1` — the Windows implementation: argument handling,
+  the platform guard, the compile-and-load step, per-window failure
   reporting, output.
 - `Native.cs` — P/Invoke declarations, Win32 constants and structs,
   plus the thin wrappers that turn a Win32 failure into an exception
   (and the DPI-context enter/restore).
-- `WindowStateController.cs` — the window logic: find the target windows of a
-  *given* process name, apply a `WindowState` and verify the result.
-- `usage.md` — the usage screen, printed by the entry.
-- `test_window_state.py` — smoke test for the argument/platform paths,
-  the source layout and the normal-rectangle regression.
+- `WindowStateController.cs` — the Windows window logic: find the target
+  windows of a *given* process name, apply a `WindowState` and verify
+  the result.
+- `window_state_linux.py` — the Linux implementation: `wmctrl` window
+  discovery and `_NET_WM_STATE` requests, per-window verification
+  through `xprop`, failure reporting, output.
+- `usage.md` — the usage screen, printed by both entries.
+- `test_window_state.py` — smoke test for the Windows argument/platform
+  paths, the source layout and the normal-rectangle regression.
+- `test_window_state_linux.py` — smoke and fake-tool tests for the Linux
+  entry and state transitions; it never touches a real window.
 
 ## How the C# is loaded
 
@@ -54,15 +64,17 @@ Consequences to preserve:
 ## How to run the tests
 
 ```bash
-python3 internal/test_window_state.py                 # direct
+python3 internal/test_window_state.py                 # Windows paths
+python3 internal/test_window_state_linux.py           # Linux paths
 python3 -m unittest discover set-window-state/internal -v
 python3 test_repo.py                                  # whole repo
 ```
 
-The smoke test needs `pwsh` or `powershell` on `PATH`; without either it
-skips the cases that run the script. The real window manipulation has to
-be verified by hand on Windows (see below) — no test here may touch a
-live window.
+The Windows smoke test needs `pwsh` or `powershell` on `PATH`; without
+either it skips the cases that run the script. The Linux test replaces
+`wmctrl` and `xprop` with fakes on `PATH`, so it needs no X display and
+never touches a live window. The real window manipulation still has to
+be verified by hand on each platform (see below).
 
 ## Detection rules
 
@@ -183,6 +195,64 @@ already lost its normal rectangle. Nothing is persisted on disk: the
 window itself is the storage, which is why the invariant "never resize
 a normal window" must not be weakened.
 
+## Linux implementation
+
+Linux has no Win32 frame bits. The portable equivalent is the EWMH
+`_NET_WM_STATE` protocol, driven by `wmctrl`:
+
+| State     | EWMH state atoms                                      |
+| --------- | ----------------------------------------------------- |
+| `max`     | `maximized_vert`, `maximized_horz`; `fullscreen` off  |
+| `restore` | none of those three atoms                             |
+| `full`    | `maximized_vert`, `maximized_horz`, then `fullscreen` |
+
+Algorithm (`window_state_linux.py`):
+
+1. Argument handling is identical to Windows: exactly two arguments,
+   lowercase state, else usage + exit 2.
+2. Require Linux, `DISPLAY`, `wmctrl` and `xprop`; otherwise exit 1 with
+   one `[FAIL]` line.
+3. `wmctrl -l -p` lists managed windows as `id desktop pid host title`.
+   Keep windows with a non-empty title whose PID is owned by the exact
+   requested process name. The name is matched literally against both
+   the executable basename (`/proc/<pid>/exe`, with a ` (deleted)`
+   suffix removed) and the kernel process name (`/proc/<pid>/comm`).
+   No path, wildcard, extension or case folding is applied.
+4. No match means `[FAIL] no window found for process <name>.` and exit
+   1, exactly like Windows.
+5. Read the current atoms with `xprop -id <id> _NET_WM_STATE`. If they
+   already match the requested state, make no change request at all;
+   this is the idempotent no-op.
+6. Apply through `wmctrl -i -r <id> -b add|remove,<prop>[,<prop>]`.
+   `wmctrl` accepts at most two properties, so clearing fullscreen and
+   maximization takes two invocations. `full` maximizes before setting
+   fullscreen, which keeps the pre-maximized geometry available and
+   mirrors the Windows normal-rectangle invariant. `restore` clears
+   fullscreen before clearing the maximized atoms.
+7. Poll `_NET_WM_STATE` for up to three seconds. Only the request is
+   synchronous for `wmctrl`; the window manager applies it later. Report
+   `[OK]` only after the atoms match; otherwise print one `[FAIL]` line
+   per window plus the exception/traceback and exit 1.
+8. State changes never call `wmctrl -a` and never send mouse or keyboard
+   input. The window manager may still decide to focus a window.
+
+Limitations specific to Linux:
+
+- `wmctrl` and `xprop` only see X11 clients. A native Wayland window is
+  invisible here, and `DISPLAY` may be unset in a pure Wayland session.
+  A Qt/X11 application running through XWayland works.
+- EWMH has no single "borderless but still maximized" state. `full`
+  therefore uses the real `fullscreen` state after maximizing. Some
+  window managers may drop the maximized atoms on their own; the
+  verification only requires `fullscreen` for `full`, while `restore`
+  clears all three atoms.
+- Focus, fullscreen monitor choice and animations belong to the window
+  manager; this tool never sets geometry directly.
+- `wmctrl -l -p` reports PID 0 for clients that do not set
+  `_NET_WM_PID`. Such a window cannot be matched by process name (the
+  same rule applies to the Windows `EnumWindows` path: no PID, no
+  match).
+
 ## Known limitations
 
 - **Several windows per process**: every matching window is set; the
@@ -206,8 +276,9 @@ a normal window" must not be weakened.
 - **Minimized window + `max`/`full`**: `IsZoomed` is false for a
   minimized window, so the command maximizes it — it does not first
   restore it.
-- Windows-only: there is no `.sh` entry, and no Linux/macOS code path
-  beyond the exit-1 guard.
+- Windows and Linux only: there is no macOS code path. On Linux the
+  `wmctrl`/`xprop` requirements and the X11/XWayland limitation above
+  apply.
 
 ## Invariants to preserve when editing
 
@@ -233,7 +304,13 @@ a normal window" must not be weakened.
    generic half, and an application-specific wrapper is a separate
    tool. The README guarantees above must be updated in the same edit
    as any change to matching, states, output or exit codes.
-9. `set-window-state.cmd` stays CRLF and keeps `%~dp0` quoted paths.
+9. `set-window-state.cmd` stays CRLF and keeps `%~dp0` quoted paths;
+   `set-window-state.sh` stays LF and resolves symlinks before using
+   its own directory.
+10. On Linux, success is reported only after re-reading
+    `_NET_WM_STATE`; `wmctrl`'s exit status only means the request was
+    sent. A window whose atoms already match receives no request, and
+    an absent process still exits 1.
 
 ## Manual verification on Windows
 
@@ -252,3 +329,27 @@ set-window-state\set-window-state.cmd notepad restore     & rem back to the size
 Close the process first for the last case: with nothing running the
 command must print `[FAIL] no window found for process notepad.` and
 exit 1.
+
+## Manual verification on Linux
+
+Use any X11/XWayland window and pass its exact process name as
+`process_name` below.
+
+```bash
+set-window-state/set-window-state.sh --help                 # usage, exit 0
+set-window-state/set-window-state.sh                        # usage, exit 2
+set-window-state/set-window-state.sh process_name           # usage, exit 2
+set-window-state/set-window-state.sh process_name toggle    # usage, exit 2
+set-window-state/set-window-state.sh process_name max       # maximized, frame visible, exit 0
+set-window-state/set-window-state.sh process_name full      # fullscreen, no frame, exit 0
+set-window-state/set-window-state.sh process_name full      # no-op, exit 0
+set-window-state/set-window-state.sh process_name max       # fullscreen off, still maximized, exit 0
+set-window-state/set-window-state.sh process_name full      # fullscreen again, exit 0
+set-window-state/set-window-state.sh process_name restore   # pre-max size, exit 0
+```
+
+With the process closed, the same command must print
+`[FAIL] no window found for process process_name.` and exit 1.
+Unset `DISPLAY` to check the display guard, and remove `wmctrl` from
+`PATH` to check the tool guard. The fake-tool unit tests cover the
+state transitions without touching a live window.

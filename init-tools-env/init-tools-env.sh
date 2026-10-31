@@ -47,6 +47,8 @@ run-qgc-apk:run-qgc-apk/run-qgc-apk.sh
 run-apk-on-avd:run-apk-on-avd/run-apk-on-avd.sh
 build-qgc-apk:qgc-android-builder/qgc-android-builder.sh
 android-avd:android-avd/android-avd.sh
+set-window-state:set-window-state/set-window-state.sh
+set-qgc-window-state:set-qgc-window-state/set-qgc-window-state.sh
 "
 
 failed=0

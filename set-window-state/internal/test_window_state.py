@@ -22,10 +22,12 @@ ENTRY = os.path.join(HERE, "..", "set-window-state.cmd")
 # is excluded: it has to name the application prefix it forbids.
 GENERIC_FILES = (
     "set-window-state.cmd",
+    "set-window-state.sh",
     "README.md",
     os.path.join("internal", "usage.md"),
     os.path.join("internal", "NOTES.md"),
     os.path.join("internal", "window_state.ps1"),
+    os.path.join("internal", "window_state_linux.py"),
     os.path.join("internal", "Native.cs"),
     os.path.join("internal", "WindowStateController.cs"),
 )

@@ -26,6 +26,8 @@ USAGE_TRIGGERS = {  # .sh basename -> (argv, expected exit code) for its usage s
     "build-linux.sh": (["--help"], 0),
     "build-qgc5.sh": (["--help"], 0),
     "stop-process.sh": ([], 2),
+    "set-window-state.sh": (["--help"], 0),
+    "set-qgc-window-state.sh": (["--help"], 0),
     "run-qgc-apk.sh": (["--help"], 0),
     "run-apk-on-avd.sh": (["--help"], 0),
     "android-avd.sh": (["--help"], 0),

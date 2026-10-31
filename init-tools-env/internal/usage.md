@@ -2,15 +2,17 @@ Usage: init-tools-env.sh [--check] [--force] [--remove] [BIN_DIR]
 
 Create, refresh or remove the soft links that put this repo's tools on PATH:
 
-  launch-qgc       -> qgc4-launch-with-logs/launch-qgc.sh
-  close-qgc        -> close-qgc/close-qgc.sh
-  format-md-table  -> md-table-aligner/format-md-table.sh
-  build-qgc        -> qgc4-builder/build-linux.sh
-  run-qgc-apk      -> run-qgc-apk/run-qgc-apk.sh
-  run-apk-on-avd   -> run-apk-on-avd/run-apk-on-avd.sh
-  build-qgc-apk    -> qgc-android-builder/qgc-android-builder.sh
-  android-avd      -> android-avd/android-avd.sh
-  launch-px4-sitl  -> launch-px4-sitl/launch-px4-sitl.sh
+  launch-qgc           -> qgc4-launch-with-logs/launch-qgc.sh
+  close-qgc            -> close-qgc/close-qgc.sh
+  format-md-table      -> md-table-aligner/format-md-table.sh
+  build-qgc            -> qgc4-builder/build-linux.sh
+  run-qgc-apk          -> run-qgc-apk/run-qgc-apk.sh
+  run-apk-on-avd       -> run-apk-on-avd/run-apk-on-avd.sh
+  build-qgc-apk        -> qgc-android-builder/qgc-android-builder.sh
+  android-avd          -> android-avd/android-avd.sh
+  set-window-state     -> set-window-state/set-window-state.sh
+  set-qgc-window-state -> set-qgc-window-state/set-qgc-window-state.sh
+  launch-px4-sitl      -> launch-px4-sitl/launch-px4-sitl.sh
 
 BIN_DIR defaults to $HOME/.local/bin. Re-running is safe and idempotent.
 

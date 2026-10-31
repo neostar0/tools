@@ -17,13 +17,62 @@ case "${1:-}" in
 esac
 if [ $# -gt 1 ]; then usage; exit 2; fi
 
-DEFAULT_QGC_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+is_qgc_root() {
+    [ -f "$1/qgroundcontrol.pro" ] || [ -f "$1/qgroundcontrol.qrc" ]
+}
 
-# Get QGC root from argument or use default (cd+pwd: realpath is not everywhere)
-QGC_ROOT="${1:-$DEFAULT_QGC_ROOT}"
-QGC_ROOT="$(cd -- "$QGC_ROOT" && pwd)"
+# Walk up from $1 until a QGroundControl checkout is found; print its root.
+find_qgc_root() {
+    local dir="$1"
+    while :; do
+        if is_qgc_root "$dir"; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+        [ "$dir" = "/" ] && return 1
+        dir="$(dirname "$dir")"
+    done
+}
 
-echo "[Launcher] QGC root: $QGC_ROOT"
+# Repo selection order: explicit argument, QGC_ROOT, current directory.
+# Never search outside the selected checkout: a recursive search from a
+# shared parent such as ~/Codes picks whichever QGC clone `find` hits first.
+if [ $# -eq 1 ]; then
+    ROOT_INPUT="$1"
+    ROOT_SOURCE="argument"
+elif [ -n "${QGC_ROOT:-}" ]; then
+    ROOT_INPUT="$QGC_ROOT"
+    ROOT_SOURCE="QGC_ROOT"
+else
+    ROOT_INPUT="$PWD"
+    ROOT_SOURCE="current directory"
+fi
+
+if ! ROOT_PATH="$(cd -- "$ROOT_INPUT" 2>/dev/null && pwd)"; then
+    echo "[ERROR] Directory not found: $ROOT_INPUT" >&2
+    exit 1
+fi
+
+if ! QGC_ROOT="$(find_qgc_root "$ROOT_PATH")"; then
+    # The tool may be installed inside a checkout; keep that working when the
+    # current directory is somewhere else.
+    QGC_ROOT="$(find_qgc_root "$SCRIPT_DIR" || true)"
+    [[ -n "$QGC_ROOT" ]] && ROOT_SOURCE="tool location"
+fi
+
+if [[ -z "$QGC_ROOT" ]]; then
+    cat >&2 <<EOF
+[ERROR] No QGroundControl repository found (looked from $ROOT_SOURCE: $ROOT_PATH)
+  A checkout is recognised by qgroundcontrol.pro or qgroundcontrol.qrc.
+  Run launch-qgc from the checkout, or pass its root:
+    launch-qgc /path/to/GroundControlSystem_ui
+  To pick a checkout from anywhere:
+    QGC_ROOT=/path/to/GroundControlSystem_ui launch-qgc
+EOF
+    exit 1
+fi
+
+echo "[Launcher] QGC root: $QGC_ROOT (from $ROOT_SOURCE)"
 
 # Detect OS
 OS_TYPE="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -41,8 +90,12 @@ if [[ "$OS_TYPE" == "linux" ]]; then
         EXE="$EXE_RELEASE"
         echo "[Launcher] Using Release build"
     else
-        # Fallback search (-perm works on both GNU and BSD find)
-        FOUND=$(find "$QGC_ROOT" -name "QGroundControl" -type f -perm -0100 2>/dev/null | head -1 || true)
+        # Fallback search inside the selected checkout only (prune generated
+        # trees: -perm works on both GNU and BSD find)
+        FOUND=$(find "$QGC_ROOT" \
+            \( -name .git -o -name build_android -o -name cache \) -prune -o \
+            -name "QGroundControl" -type f -perm -0100 -print 2>/dev/null \
+            | head -1 || true)
         if [[ -n "$FOUND" ]]; then
             EXE="$FOUND"
             echo "[Launcher] Found via search: $EXE"

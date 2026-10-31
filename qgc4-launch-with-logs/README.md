@@ -21,19 +21,31 @@ python internal/launch_qgc.py --help     # all options, Windows/Linux/macOS
 ./launch-qgc.sh [QGC_REPO_ROOT]          # shell launcher
 ```
 
+Run it from the checkout you want to launch; the repo root is found by
+walking up from the current directory. Pass `QGC_REPO_ROOT` (or set
+`QGC_ROOT`) to launch a different checkout without `cd`-ing into it:
+
+```bash
+launch-qgc /path/to/GroundControlSystem_ui
+```
+
+Sibling clones are never searched, so the choice is always the repo you
+named or the one you are standing in.
+
 The log is created in the current working directory. Default categories
 cover parameter loading, MAVLink, health checks and GStreamer (see
 `--help`).
 
 ## Options
 
-| Flag            | Default                           | Description                              |
-| --------------- | --------------------------------- | ---------------------------------------- |
-| `QGC_REPO_ROOT` | three levels above the tool folder | Path to QGroundControl git repository   |
-| `--categories`  | 5 default categories              | Space-separated log categories to enable |
-| `--no-log-file` | false                             | Output to console only, no log file      |
-| `--pause`       | false                             | Wait for Enter before exiting            |
-| `--help`        | -                                 | Print all options and exit               |
+| Flag            | Default                                    | Description                              |
+| --------------- | ------------------------------------------ | ---------------------------------------- |
+| `QGC_REPO_ROOT` | current directory (walks up to repo root)  | Path to QGroundControl git repository    |
+| `QGC_ROOT`      | -                                          | Same, as an environment variable         |
+| `--categories`  | 5 default categories                       | Space-separated log categories to enable |
+| `--no-log-file` | false                                      | Output to console only, no log file      |
+| `--pause`       | false                                      | Wait for Enter before exiting            |
+| `--help`        | -                                          | Print all options and exit               |
 
 ## Exit codes
 
@@ -67,6 +79,8 @@ Python 3.6+ (for the `.py` launcher); QGroundControl built with Qt 5.15.
 
 - Auto-detects OS (Windows/Linux/macOS) and finds the Debug/Release
   executable
+- Targets the checkout you run it from (or the one you name); sibling
+  clones are never scanned
 - Never modifies QGC source, build artifacts, or settings/INI files — only
   environment variables for the launched process
 - Log file created in **current working directory**, not the repo

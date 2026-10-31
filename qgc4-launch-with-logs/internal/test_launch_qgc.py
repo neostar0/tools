@@ -11,9 +11,33 @@ from pathlib import Path
 # Add internal to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from launch_qgc import detect_os, find_qgc_executable, setup_log_categories, available_log_path
+from launch_qgc import (
+    detect_os,
+    find_qgc_executable,
+    setup_log_categories,
+    available_log_path,
+    is_qgc_root,
+    resolve_qgc_root,
+)
 
 SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "launch_qgc.py")
+
+
+def make_qgc_root(root: Path) -> Path:
+    """Add the marker files that identify a QGroundControl checkout."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "qgroundcontrol.pro").write_text("# test marker\n")
+    return root
+
+
+def make_fake_build(root: Path, output: str) -> Path:
+    """Create an executable at the standard Linux build path."""
+    staging = root / "build" / "staging"
+    staging.mkdir(parents=True)
+    exe = staging / "QGroundControl"
+    exe.write_text(f"#!/bin/sh\necho {output}\nexit 0\n")
+    exe.chmod(0o755)
+    return exe
 
 
 class TestQGCLaucher(unittest.TestCase):
@@ -89,12 +113,65 @@ class TestQGCLaucher(unittest.TestCase):
 
     def test_missing_executable_exits_1_without_traceback(self):
         with tempfile.TemporaryDirectory() as tmpdir:
+            root = make_qgc_root(Path(tmpdir))
+            result = subprocess.run(
+                [sys.executable, SCRIPT, str(root), "--no-log-file"],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertIn("Could not find", result.stdout)
+
+    def test_non_repo_directory_exits_1_with_hint(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
             result = subprocess.run(
                 [sys.executable, SCRIPT, tmpdir, "--no-log-file"],
                 capture_output=True, text=True)
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertNotIn("Traceback", result.stderr)
-            self.assertIn("Could not find", result.stdout)
+            self.assertIn("No QGroundControl repository found", result.stdout)
+            self.assertIn("launch_qgc.py /path/to/GroundControlSystem_ui", result.stdout)
+
+    def test_is_qgc_root_accepts_either_marker(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.assertFalse(is_qgc_root(root))
+            (root / "qgroundcontrol.qrc").write_text("")
+            self.assertTrue(is_qgc_root(root))
+
+    def test_resolve_qgc_root_walks_up_from_subdirectory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = make_qgc_root(Path(tmpdir) / "GroundControlSystem_ui")
+            nested = root / "src" / "api"
+            nested.mkdir(parents=True)
+            self.assertEqual(resolve_qgc_root(nested), root.resolve())
+
+    def test_resolve_qgc_root_returns_none_outside_checkout(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.assertIsNone(resolve_qgc_root(Path(tmpdir)))
+
+    @unittest.skipUnless(os.name == "posix", "fake executable is a shell script")
+    def test_default_root_is_current_directory_not_sibling(self):
+        """Running from repo B must launch B, never a sibling clone."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            repo_a = make_qgc_root(base / "GroundControlSystem_git")
+            repo_b = make_qgc_root(base / "GroundControlSystem_ui")
+            make_fake_build(repo_a, "RAN_REPO_A")
+            make_fake_build(repo_b, "RAN_REPO_B")
+
+            result = subprocess.run(
+                [sys.executable, SCRIPT, "--no-log-file"],
+                cwd=repo_b, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("RAN_REPO_B", result.stdout)
+            self.assertNotIn("RAN_REPO_A", result.stdout)
+
+            result = subprocess.run(
+                [sys.executable, SCRIPT, str(repo_a), "--no-log-file"],
+                cwd=repo_b, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("RAN_REPO_A", result.stdout)
+            self.assertNotIn("RAN_REPO_B", result.stdout)
 
     def test_pause_flag_waits_for_enter_but_survives_closed_stdin(self):
         with tempfile.TemporaryDirectory() as tmpdir:

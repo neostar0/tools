@@ -22,6 +22,18 @@ python -m unittest discover internal -v
 
 ## Detection Rules
 
+### Repository Root
+1. `QGC_REPO_ROOT` CLI argument
+2. `QGC_ROOT` environment variable
+3. Current working directory, walking up until a checkout is found
+4. Ancestors of the tool folder (tool installed inside a checkout)
+
+A checkout is recognised by `qgroundcontrol.pro` or `qgroundcontrol.qrc` in
+the directory. There is deliberately **no** search of a shared parent
+directory: the old script defaulted to the tools repo's grandparent
+(`~/Codes`), so running it from one clone could launch a sibling clone.
+When nothing matches, the launcher exits 1 with the paths and the fix.
+
 ### OS Detection
 - `sys.platform.startswith("win")` → windows
 - `sys.platform.startswith("linux")` → linux
@@ -31,12 +43,13 @@ python -m unittest discover internal -v
 ### Executable Search Priority (Windows)
 1. `build/Desktop_Qt_5_15_2_MSVC2019_64bit-Debug/staging/QGroundControl.exe`
 2. `build/Desktop_Qt_5_15_2_MSVC2019_64bit-Release/staging/QGroundControl.exe`
-3. Recursive `rglob("QGroundControl.exe")` fallback
+3. Recursive `QGroundControl.exe` fallback inside the checkout
 
 ### Executable Search Priority (Linux)
 1. `build/staging/QGroundControl` (executable)
 2. `build/release/staging/QGroundControl` (executable)
-3. Recursive `rglob("QGroundControl")` + executable check
+3. Recursive `QGroundControl` + executable check inside the checkout
+   (the shell launcher prunes `.git`, `build_android` and `cache`)
 
 ### Executable Search Priority (macOS)
 1. `build/staging/QGroundControl.app/Contents/MacOS/QGroundControl`
@@ -45,7 +58,8 @@ python -m unittest discover internal -v
 
 1. Parse CLI args (repo root, `--categories`, `--no-log-file`, `--pause`)
 2. Detect OS via `sys.platform`
-3. Resolve QGC repo root (arg → three levels above the tool root → cwd)
+3. Resolve QGC repo root (arg → `QGC_ROOT` → cwd walked up to the
+   checkout root → checkout containing the tool → error)
 4. Search for executable per OS priority list
 5. Build environment: `QGC_LOGGING_CATEGORIES`, `QT_FORCE_STDERR_LOGGING=1`,
    `QT_ASSUME_STDERR_HAS_CONSOLE=1`, `QT_LOGGING_RULES`, `PYTHONUNBUFFERED=1`

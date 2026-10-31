@@ -33,6 +33,23 @@ def detect_os():
         return "macos"
     return "unknown"
 
+# A QGroundControl checkout is identified by these top-level files.
+QGC_ROOT_MARKERS = ("qgroundcontrol.pro", "qgroundcontrol.qrc")
+
+def is_qgc_root(path: Path) -> bool:
+    """Return True when `path` is the root of a QGroundControl checkout."""
+    return any((path / marker).is_file() for marker in QGC_ROOT_MARKERS)
+
+def resolve_qgc_root(start: Path) -> "Path | None":
+    """Walk up from `start` until a QGroundControl checkout is found."""
+    path = start.resolve()
+    while True:
+        if is_qgc_root(path):
+            return path
+        if path.parent == path:
+            return None
+        path = path.parent
+
 def find_qgc_executable(qgc_root: Path, os_type: str) -> "Path | None":
     """Find QGroundControl executable based on OS and build type"""
     if os_type == "windows":
@@ -93,20 +110,42 @@ def main():
     os_type = detect_os()
     print(f"[Launcher] OS detected: {os_type}")
 
-    # Determine QGC root
+    # Determine QGC root: explicit argument > QGC_ROOT > current directory.
+    # Never derive it from the tool folder unless the tool is installed inside
+    # a checkout: a shared parent such as ~/Codes would launch whichever QGC
+    # clone happens to be found first.
+    explicit = args.qgc_root or os.environ.get("QGC_ROOT") or None
     if args.qgc_root:
-        qgc_root = Path(args.qgc_root).resolve()
+        root_source = "argument"
+    elif explicit:
+        root_source = "QGC_ROOT"
     else:
-        script_dir = Path(__file__).parent.parent.resolve()  # internal/ -> tool root
-        # Check if we're in the tools package (has internal/launch_qgc.py)
-        if (script_dir / "internal" / "launch_qgc.py").exists():
-            # We're in tools package, use grandparent
-            qgc_root = script_dir.parent.parent.resolve()
-        else:
-            # We're in project root or elsewhere, use current directory
-            qgc_root = Path.cwd().resolve()
+        root_source = "current directory"
 
-    print(f"[Launcher] QGC root: {qgc_root}")
+    qgc_root = None
+    if explicit:
+        qgc_root = resolve_qgc_root(Path(explicit).expanduser())
+    else:
+        qgc_root = resolve_qgc_root(Path.cwd())
+
+    if qgc_root is None:
+        script_dir = Path(__file__).parent.parent.resolve()  # internal/ -> tool root
+        qgc_root = resolve_qgc_root(script_dir)
+        if qgc_root is not None:
+            root_source = "tool location"
+
+    if qgc_root is None:
+        looked_from = Path(explicit).expanduser() if explicit else Path.cwd()
+        print("[ERROR] No QGroundControl repository found "
+              f"(looked from {root_source}: {looked_from})")
+        print("  A checkout is recognised by qgroundcontrol.pro or qgroundcontrol.qrc.")
+        print("  Run the launcher from the checkout, or pass its root:")
+        print("    python internal/launch_qgc.py /path/to/GroundControlSystem_ui")
+        print("  To pick a checkout from anywhere:")
+        print("    QGC_ROOT=/path/to/GroundControlSystem_ui python internal/launch_qgc.py")
+        sys.exit(1)
+
+    print(f"[Launcher] QGC root: {qgc_root} (from {root_source})")
 
     # Find executable
     exe = find_qgc_executable(qgc_root, os_type)

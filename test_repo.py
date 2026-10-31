@@ -28,6 +28,8 @@ USAGE_TRIGGERS = {  # .sh basename -> (argv, expected exit code) for its usage s
     "stop-process.sh": ([], 2),
     "set-window-state.sh": (["--help"], 0),
     "set-qgc-window-state.sh": (["--help"], 0),
+    "serve-video-rtsp.sh": (["--help"], 0),
+    "check-mediamtx.sh": (["--help"], 0),
     "run-qgc-apk.sh": (["--help"], 0),
     "run-apk-on-avd.sh": (["--help"], 0),
     "android-avd.sh": (["--help"], 0),
@@ -35,7 +37,7 @@ USAGE_TRIGGERS = {  # .sh basename -> (argv, expected exit code) for its usage s
     "launch-realsense-viewer.sh": (["--help"], 0),
 }
 # Linux/macOS only; soft links or Ubuntu-only installers, no .cmd/.bat
-NO_WINDOWS_ENTRY = {"init-tools-env", "launch-realsense-viewer"}
+NO_WINDOWS_ENTRY = {"init-tools-env", "launch-px4-sitl", "launch-realsense-viewer"}
 
 
 def rel(path):

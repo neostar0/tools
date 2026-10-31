@@ -36,8 +36,9 @@ USAGE_TRIGGERS = {  # .sh basename -> (argv, expected exit code) for its usage s
     "qgc-android-builder.sh": (["--help"], 0),
     "launch-realsense-viewer.sh": (["--help"], 0),
 }
-# Linux/macOS only; soft links or Ubuntu-only installers, no .cmd/.bat
-NO_WINDOWS_ENTRY = {"init-tools-env", "launch-px4-sitl", "launch-realsense-viewer"}
+# Linux/macOS only; soft links, bash+adb helpers or Ubuntu-only installers
+NO_WINDOWS_ENTRY = {"deploy-qgc-apk", "init-tools-env", "install-qgc-apk-via-usb",
+                    "launch-px4-sitl", "launch-realsense-viewer"}
 
 
 def rel(path):
